@@ -3,6 +3,8 @@ from functools import cached_property
 
 import numpy as np
 
+import ipdb
+
 import condor as co
 import condor.solvers.sweeping_gradient_method as sgm
 from condor import backend
@@ -64,6 +66,21 @@ class TrajectoryAnalysis:
         model_instance.options_dict = options_to_kwargs(model)
         self.construct(model, **model_instance.options_dict)
         self(model_instance)
+
+    def test_callback_if_integration_breakpoint(self, solver):
+        print("test")
+
+        print(self.model_instance)
+
+        print(solver)
+
+        ipdb.set_trace()
+        
+        # is self.model_instance accessable here? 
+
+        # if sweeping_gradient_method reaches the breakpoint, we want to come
+        # in here and then print out stuff about model_instance evaluated at 
+        # the time that the sim reached the breakpoint (failure in System.simulate)
 
     def construct(
         self,
@@ -315,14 +332,14 @@ class TrajectoryAnalysis:
             **state_options,
         )
         self.state_system.model_instance = self.model_instance
+        self.state_system.breakpoint_callback = self.test_callback_if_integration_breakpoint
         self.at_time_slices = at_time_slices
-
         self.trajectory_analysis_nom = sgm.TrajectoryAnalysis(
             state_system=self.state_system,
             integrand_terms=self.traj_out_integrand_func,
             terminal_terms=self.traj_out_terminal_term_func,
         )
-
+         
         self.callback = FunctionOperator(
             function=self.trajectory_analysis_nom,
             get_jacobian_func=self.generate_sgm_jacobian if self.can_sgm else None,

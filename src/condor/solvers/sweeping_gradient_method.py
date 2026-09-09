@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+import ipdb
+
 # from condor import backend
 from scipy.interpolate import make_interp_spline
 
@@ -253,6 +255,8 @@ class SolverSciPyBase(SolverMixin):
                 solver.integrate(next_t)
                 if not solver.successful():
                     results.e.append(Root(len(results.t), np.zeros(system.num_events)))
+                    ipdb.set_trace()
+                    self.system.breakpoint_callback(solver)
                     breakpoint()
                     return
 
@@ -583,6 +587,8 @@ class System:
         if adaptive_min_steps, treat max_step_size as the fraction of the next
         simulation span. Otherwise, use as absolute value.
         """
+
+        breakpoint_callback: callable = None
 
         # simulation must be terminated with event so must provide everything
 
