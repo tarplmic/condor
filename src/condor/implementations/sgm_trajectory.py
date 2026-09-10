@@ -67,20 +67,49 @@ class TrajectoryAnalysis:
         self.construct(model, **model_instance.options_dict)
         self(model_instance)
 
-    def test_callback_if_integration_breakpoint(self, solver):
-        print("test")
+    def callback_if_integration_breakpoint(self, solver, system):
 
-        print(self.model_instance)
+        #print(self.model_instance)
+        #print(solver)
 
-        print(solver)
+        print("\n\n Integration Unsuccessful")
+        print("\n Model State Names")
+        for state in self.model.state.keys():
+            print(state)
 
-        ipdb.set_trace()
+        solver_dot = solver.f(solver.t, solver.y)
+        print("\nSolver States:")
+        print(f"Time: {solver.t}")
+        print(f"First 6 elements of state: {solver.y[0:6]}")
+        print(f"First 6 elements of derivative: {solver_dot[0:6]}")
+
+        print("\n Output Names")
+        for output in self.model.dynamic_output.keys():
+            print(output)
+
+        res = system.result
+        output_hist = np.empty((np.array(res.t).size, self.model.dynamic_output._count))
+        if self.dynamic_output_func:
+            for idx, (t, x) in enumerate(zip(res.t, res.x)):
+                output_hist[idx, None] = self.dynamic_output_func(res.p, t, x).T
+
+        print("\nSolver Outputs:")
+        print(f"Time: {solver.t}")
+        print(f"First 3 elements of output: {output_hist[-1, 0:3]}")
+
+        # Q: Is there an unwrap function that takes the state/deriv or output list
+        # and packages it back into each individual variable? 
         
-        # is self.model_instance accessable here? 
+        # Pretty sure I have all the raw data I want; I have history of time, 
+        # state, state derivatives, outputs, and parameters from the sim. 
+        # I can see the raw data, but want to package it in a way that is easy for user to 
+        # understand. Aka, loop through each state/deriv, output, and print out for at least
+        # most recent time, maybe for all time? 
+        # "chaser_pos_in_CW: state = value, deriv = value"
+        # "aug_cov: state = value, deriv = value"
+        # controller_cmd_acc: value"
 
-        # if sweeping_gradient_method reaches the breakpoint, we want to come
-        # in here and then print out stuff about model_instance evaluated at 
-        # the time that the sim reached the breakpoint (failure in System.simulate)
+        #ipdb.set_trace()
 
     def construct(
         self,
@@ -332,7 +361,7 @@ class TrajectoryAnalysis:
             **state_options,
         )
         self.state_system.model_instance = self.model_instance
-        self.state_system.breakpoint_callback = self.test_callback_if_integration_breakpoint
+        self.state_system.breakpoint_callback = self.callback_if_integration_breakpoint
         self.at_time_slices = at_time_slices
         self.trajectory_analysis_nom = sgm.TrajectoryAnalysis(
             state_system=self.state_system,

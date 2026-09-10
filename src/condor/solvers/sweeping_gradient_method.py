@@ -255,8 +255,7 @@ class SolverSciPyBase(SolverMixin):
                 solver.integrate(next_t)
                 if not solver.successful():
                     results.e.append(Root(len(results.t), np.zeros(system.num_events)))
-                    ipdb.set_trace()
-                    self.system.breakpoint_callback(solver)
+                    self.system.breakpoint_callback(solver, self.system)
                     breakpoint()
                     return
 
