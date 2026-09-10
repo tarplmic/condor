@@ -1,5 +1,9 @@
 import dataclasses as dc
 import logging
+import ipdb
+import re
+import numpy as np
+import casadi as ca
 
 from condor import backend, implementations
 
@@ -1405,9 +1409,47 @@ class Model(metaclass=ModelType):
             cls._meta.input_fields, *args, **kwargs
         )
 
+        print(self.__class__)
+
+        err_flag = 0
+        err_string = ""
+
         for field_dc in bound_input_fields:
             self.bind_field(field_dc, symbols_to_instance=True)
             self.input_kwargs.update(field_dc.asdict())
+
+            # Already looking at each input field dataclass, 
+            # so can go through each element and check size
+            # for it
+            # field_dc holds either Parameter, FilterAlgoState, 
+            # State, or Input
+
+
+            # If this is an analysis class
+            # NOTE: need to have a better way to detect this
+            if re.search(r"<([^:]+):", f"{cls}").group(1) == 'Analysis':
+                for name, value in field_dc.asdict().items():
+
+                    if isinstance(value, ca.MX):
+                        value = value.to_DM()
+                    if isinstance(value, ca.SX):
+                        value = ca.DM(value)
+
+                    new_value = np.atleast_1d(value)
+                    if new_value.ndim == 1:
+                        new_value = new_value[:, np.newaxis]
+                    print(name)
+                    print(new_value.shape)
+                    print(getattr(cls, name).shape)
+                    if not new_value.shape == getattr(cls, name).shape:
+                        err_flag = 1
+                        err_string += (
+                            f"{name} parameter was assigned with shape {new_value.shape}, "
+                            f"but should be shape {getattr(cls, name).shape}\n"
+                        )
+                        
+        if err_flag:
+            raise ValueError(err_string)
 
     def bind_field(self, dataclass, symbols_to_instance=True):
         if symbols_to_instance:
