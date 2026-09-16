@@ -1414,13 +1414,28 @@ class Model(metaclass=ModelType):
 
                 if isinstance(input_value, (int, float, np.ndarray, list)):
                     input_value = np.atleast_2d(input_value)
-                    # want all row vectors to be made column vectors
-                    if input_value.shape[0] == 1:
-                        input_value = input_value.reshape(-1, 1)
 
                 input_shape = input_value.shape
 
-                if input_shape != desired_shape:
+                # if input is not a vector, then it has to
+                # match desired_shape exactly
+                # if desired_input is a vector, then
+                # input can be row or column vector
+
+                base_shape_correct = input_shape == desired_shape
+                input_is_vector = len(input_shape) == 2 and (
+                    input_shape[0] == 1 or input_shape[1] == 1
+                )
+                vector_input_incorrect_size = (
+                    input_is_vector
+                    and not base_shape_correct
+                    and (input_value.T.shape != desired_shape)
+                )
+                non_vector_input_incorrect_size = (
+                    not input_is_vector and not base_shape_correct
+                )
+
+                if non_vector_input_incorrect_size or vector_input_incorrect_size:
                     err_flag = 1
                     err_string += (
                         f"{input_field._name} {name} was assigned with shape "
