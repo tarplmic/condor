@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-import ipdb
-
 # from condor import backend
 from scipy.interpolate import make_interp_spline
 
@@ -255,7 +253,9 @@ class SolverSciPyBase(SolverMixin):
                 solver.integrate(next_t)
                 if not solver.successful():
                     results.e.append(Root(len(results.t), np.zeros(system.num_events)))
-                    self.system.breakpoint_callback(solver, self.system)
+                    self.system.integration_failure_callback(self.system)
+                    # NOTE: maybe delete this breakpoint, do it instead inside of
+                    # integration_failure_callback based on options
                     breakpoint()
                     return
 
@@ -580,14 +580,13 @@ class System:
         num_events,
         terminating,
         dynamic_output=None,
+        integration_failure_callback=None,  # default could be: lambda *args: breakpoint
         **solver_options,
     ):
         """
         if adaptive_min_steps, treat max_step_size as the fraction of the next
         simulation span. Otherwise, use as absolute value.
         """
-
-        breakpoint_callback: callable = None
 
         # simulation must be terminated with event so must provide everything
 
@@ -607,6 +606,7 @@ class System:
         #     list of functions for
         self._updates = updates
         self.dynamic_output = dynamic_output
+        self.integration_failure_callback = integration_failure_callback
 
         #     define initial conditions
         self._initial_state = initial_state

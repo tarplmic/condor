@@ -3,8 +3,6 @@ from functools import cached_property
 
 import numpy as np
 
-import ipdb
-
 import condor as co
 import condor.solvers.sweeping_gradient_method as sgm
 from condor import backend
@@ -46,6 +44,81 @@ def isnan(x):
     return isinstance(x, float) and np.isnan(x)
 
 
+# NOTE: add options to **options for what we want __call__ to do, instead of directly
+# passing into IntegrationFailureHandler? for if the user wants to use the default
+# method but with certain options set, then they don't have to import
+# IntegrationFailureHandler class
+class IntegrationFailureHandler:
+    def __init__(
+        self,
+        do_print_debug=True,
+        save_debug_to_file=False,
+        debug_file_name="trajectory_analysis_result_log",
+    ):
+        self.do_print_debug = do_print_debug
+        self.save_debug_to_file = save_debug_to_file
+        self.debug_file_name = debug_file_name
+
+    def set_model(self, model):
+        self.traj_analysis = model
+
+    def compute_final_states_outputs(self, system):
+        traj_analysis = self.traj_analysis
+
+        res = system.result
+
+        # system.result doesn't save off dynamic_ouptuts by default
+        output_hist = np.empty(
+            (np.array(res.t).size, traj_analysis.model.dynamic_output._count)
+        )
+        dot_hist = np.empty(np.array(res.x).shape)
+        if traj_analysis.dynamic_output_func:
+            for idx, (t, x) in enumerate(zip(res.t, res.x)):
+                output_hist[idx, None] = traj_analysis.dynamic_output_func(
+                    res.p, t, x
+                ).T
+                dot_hist[idx, None] = system.dots(res.t[idx], np.array(res.x)[idx, :])
+
+        res.y = output_hist
+
+        self.traj_analysis.bind_result(traj_analysis.model_instance, res)
+
+    def __call__(self, system):
+        self.compute_final_states_outputs(system)
+        traj_analysis = self.traj_analysis
+
+        if self.do_print_debug:
+            print("\n\n Integration Unsuccessful!!!!!!!!!!!")
+
+            print("\n\nValues of States Before Failure: ")
+            for name in traj_analysis.model_instance.state.asdict():
+                data = traj_analysis.model_instance.state.asdict()[name]
+                print(f"\nValue of {name} before integration failure:")
+                print(data[:, :, -1])
+
+            print("\n\nValues of Outputs Before Failure: ")
+            for name in traj_analysis.model_instance.dynamic_output.asdict():
+                data = traj_analysis.model_instance.dynamic_output.asdict()[name]
+                print(f"\nValue of {name} before integration failure:")
+                print(data[:, :, -1])
+
+            print(
+                f"\nIf you would like to turn off display of debugging info, "
+                f"set integration_failure_handler to IntegrationFailureHandler(False) "
+                f"in {traj_analysis.model} Options class.\n"
+            )
+        else:
+            print(
+                f"\nIf you would like to display debugging info, "
+                f"set integration_failure_handler to IntegrationFailureHandler(True) "
+                f"in {traj_analysis.model} Options class.\n"
+            )
+
+        if self.save_debug_to_file:
+            print(f"Saving results to {self.debug_file_name}")
+            system.result.save(self.debug_file_name)
+
+
 class TrajectoryAnalysis:
     """Implementation for :class:`~condor.contrib.TrajectoryAnalysis` model.
 
@@ -66,50 +139,6 @@ class TrajectoryAnalysis:
         model_instance.options_dict = options_to_kwargs(model)
         self.construct(model, **model_instance.options_dict)
         self(model_instance)
-
-    def callback_if_integration_breakpoint(self, solver, system):
-
-        #print(self.model_instance)
-        #print(solver)
-
-        print("\n\n Integration Unsuccessful")
-        print("\n Model State Names")
-        for state in self.model.state.keys():
-            print(state)
-
-        solver_dot = solver.f(solver.t, solver.y)
-        print("\nSolver States:")
-        print(f"Time: {solver.t}")
-        print(f"First 6 elements of state: {solver.y[0:6]}")
-        print(f"First 6 elements of derivative: {solver_dot[0:6]}")
-
-        print("\n Output Names")
-        for output in self.model.dynamic_output.keys():
-            print(output)
-
-        res = system.result
-        output_hist = np.empty((np.array(res.t).size, self.model.dynamic_output._count))
-        if self.dynamic_output_func:
-            for idx, (t, x) in enumerate(zip(res.t, res.x)):
-                output_hist[idx, None] = self.dynamic_output_func(res.p, t, x).T
-
-        print("\nSolver Outputs:")
-        print(f"Time: {solver.t}")
-        print(f"First 3 elements of output: {output_hist[-1, 0:3]}")
-
-        # Q: Is there an unwrap function that takes the state/deriv or output list
-        # and packages it back into each individual variable? 
-        
-        # Pretty sure I have all the raw data I want; I have history of time, 
-        # state, state derivatives, outputs, and parameters from the sim. 
-        # I can see the raw data, but want to package it in a way that is easy for user to 
-        # understand. Aka, loop through each state/deriv, output, and print out for at least
-        # most recent time, maybe for all time? 
-        # "chaser_pos_in_CW: state = value, deriv = value"
-        # "aug_cov: state = value, deriv = value"
-        # controller_cmd_acc: value"
-
-        #ipdb.set_trace()
 
     def construct(
         self,
@@ -343,6 +372,14 @@ class TrajectoryAnalysis:
         else:
             self.dynamic_output_func = None
 
+        if state_options.get("integration_failure_handler") is not None:
+            self.integration_failure_handler = state_options.pop(
+                "integration_failure_handler", None
+            )
+        else:
+            self.integration_failure_handler = IntegrationFailureHandler()
+        self.integration_failure_handler.set_model(self)
+
         self.state_system = sgm.System(
             dim_state=model.state._count,
             initial_state=self.state0,
@@ -358,17 +395,17 @@ class TrajectoryAnalysis:
             num_events=num_events,
             terminating=terminating,
             dynamic_output=self.dynamic_output_func,
+            integration_failure_callback=self.integration_failure_handler,
             **state_options,
         )
         self.state_system.model_instance = self.model_instance
-        self.state_system.breakpoint_callback = self.callback_if_integration_breakpoint
         self.at_time_slices = at_time_slices
         self.trajectory_analysis_nom = sgm.TrajectoryAnalysis(
             state_system=self.state_system,
             integrand_terms=self.traj_out_integrand_func,
             terminal_terms=self.traj_out_terminal_term_func,
         )
-         
+
         self.callback = FunctionOperator(
             function=self.trajectory_analysis_nom,
             get_jacobian_func=self.generate_sgm_jacobian if self.can_sgm else None,
@@ -598,6 +635,11 @@ class TrajectoryAnalysis:
 
     @staticmethod
     def bind_result(model_instance, res):
+        if isinstance(res.x, list):
+            res.x = np.array(res.x)
+        if isinstance(res.y, list):
+            res.y = np.array(res.y)
+
         model_instance._res = res
         model_instance.t = np.array(res.t)
 
