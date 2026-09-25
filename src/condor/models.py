@@ -1412,7 +1412,7 @@ class Model(metaclass=ModelType):
                 desired_shape = getattr(cls, name).shape
                 input_value = getattr(self, name)
 
-                if isinstance(input_value, (int, float, np.ndarray, list)):
+                if not isinstance(input_value, backend.symbol_class):
                     input_value = np.atleast_2d(input_value)
 
                 input_shape = input_value.shape

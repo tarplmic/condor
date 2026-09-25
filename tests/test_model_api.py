@@ -146,3 +146,41 @@ def test_indexing():
     out = Sys(x=x)
 
     assert out.y == 2 * x[1, 0]
+
+
+def test_invalid_size_check():
+    class MySys(co.ExplicitSystem):
+        x = input(shape=(2, 1))
+        y = input(shape=(2, 2))
+        output.z = y @ x
+
+    sim1 = MySys(
+        x=(0, 1),
+        y=[[1, 2], [3, 4]],
+    )
+    sim2 = MySys(
+        x=np.array([0, 1]),
+        y=np.zeros((2, 2)),
+    )
+    sim3 = MySys(
+        x=np.ones((1, 2)),
+        y=co.backend.operators.zeros((2, 2)),
+    )
+
+    with pytest.raises(ValueError, match="was assigned with shape"):
+        sim4 = MySys(
+            x=(0.1, 0.1, 0.1),
+            y=0,
+        )
+
+    with pytest.raises(ValueError, match="was assigned with shape"):
+        sim5 = MySys(
+            x=np.array([0]),
+            y=(1, 2, 3),
+        )
+
+    with pytest.raises(ValueError, match="was assigned with shape"):
+        sim5 = MySys(
+            x=co.backend.operators.zeros((3, 3)),
+            y=co.backend.operators.zeros((2, 1)),
+        )
