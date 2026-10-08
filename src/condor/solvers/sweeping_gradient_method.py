@@ -254,9 +254,6 @@ class SolverSciPyBase(SolverMixin):
                 if not solver.successful():
                     results.e.append(Root(len(results.t), np.zeros(system.num_events)))
                     self.system.integration_failure_callback(self.system)
-                    # NOTE: maybe delete this breakpoint, do it instead inside of
-                    # integration_failure_callback based on options
-                    breakpoint()
                     return
 
                 # assume we have an event, either a true event or at next_t

@@ -51,26 +51,32 @@ def isnan(x):
 class IntegrationFailureHandler:
     def __init__(
         self,
-        do_print_debug=True,
-        save_debug_to_file=False,
+        do_print_debug=False,
+        do_save_debug_to_npz_file=False,
         debug_file_name="trajectory_analysis_result_log",
+        do_raise_exception=False,
+        do_set_breakpoint=False,
     ):
         self.do_print_debug = do_print_debug
-        self.save_debug_to_file = save_debug_to_file
+        self.do_save_debug_to_npz_file = do_save_debug_to_npz_file
         self.debug_file_name = debug_file_name
+        self.do_set_breakpoint = do_set_breakpoint
+        self.do_raise_exception = do_raise_exception
 
     def set_model(self, model):
         self.traj_analysis = model
 
-    def compute_final_states_outputs(self, system):
+    def compute_states_outputs_derivs(self, system):
         traj_analysis = self.traj_analysis
 
         res = system.result
 
-        # system.result doesn't save off dynamic_ouptuts by default
+        # system.result doesn't save off dynamic_ouptuts by default,
+        # so generate them here
         output_hist = np.empty(
             (np.array(res.t).size, traj_analysis.model.dynamic_output._count)
         )
+        # create history of state derivatives
         dot_hist = np.empty(np.array(res.x).shape)
         if traj_analysis.dynamic_output_func:
             for idx, (t, x) in enumerate(zip(res.t, res.x)):
@@ -82,14 +88,24 @@ class IntegrationFailureHandler:
         res.y = output_hist
 
         self.traj_analysis.bind_result(traj_analysis.model_instance, res)
+        self.dot_hist = self.traj_analysis.model.state.wrap(dot_hist.T)
 
     def __call__(self, system):
-        self.compute_final_states_outputs(system)
+        self.compute_states_outputs_derivs(system)
         traj_analysis = self.traj_analysis
 
-        if self.do_print_debug:
-            print("\n\n Integration Unsuccessful!!!!!!!!!!!")
+        print("\n\n Integration Unsuccessful!")
+        print(
+            "These options are available to set in the "
+            f"{traj_analysis.model} Options class:\n"
+            "integration_failure_default_handler_print_debug_info\n"
+            "integration_failure_default_handler_save_debug_file\n"
+            "integration_failure_default_handler_save_debug_file_name\n"
+            "integration_failure_default_handler_set_breakpoint\n"
+            "integration_failure_default_handler_raise_exception\n"
+        )
 
+        if self.do_print_debug:
             print("\n\nValues of States Before Failure: ")
             for name in traj_analysis.model_instance.state.asdict():
                 data = traj_analysis.model_instance.state.asdict()[name]
@@ -102,21 +118,16 @@ class IntegrationFailureHandler:
                 print(f"\nValue of {name} before integration failure:")
                 print(data[:, :, -1])
 
-            print(
-                f"\nIf you would like to turn off display of debugging info, "
-                f"set integration_failure_handler to IntegrationFailureHandler(False) "
-                f"in {traj_analysis.model} Options class.\n"
-            )
-        else:
-            print(
-                f"\nIf you would like to display debugging info, "
-                f"set integration_failure_handler to IntegrationFailureHandler(True) "
-                f"in {traj_analysis.model} Options class.\n"
-            )
-
-        if self.save_debug_to_file:
+        if self.do_save_debug_to_npz_file:
             print(f"Saving results to {self.debug_file_name}")
             system.result.save(self.debug_file_name)
+
+        if self.do_raise_exception:
+            error_msg = "Integration unsuccessful."
+            raise Exception(error_msg)
+
+        if self.do_set_breakpoint:
+            breakpoint()
 
 
 class TrajectoryAnalysis:
@@ -372,12 +383,72 @@ class TrajectoryAnalysis:
         else:
             self.dynamic_output_func = None
 
-        if state_options.get("integration_failure_handler") is not None:
+        if state_options.get("integration_failure_handler_class") is not None:
             self.integration_failure_handler = state_options.pop(
-                "integration_failure_handler", None
+                "integration_failure_handler_class", None
             )
         else:
-            self.integration_failure_handler = IntegrationFailureHandler()
+            # if user doesn't pass in their own integration_failure_handler_class,
+            # assign the default handler class, and check if they set
+            # any of the options in the TrajectoryAnalysis
+            if (
+                state_options.get(
+                    "integration_failure_default_handler_print_debug_info"
+                )
+                is not None
+            ):
+                print_debug_info = state_options.pop(
+                    "integration_failure_default_handler_print_debug_info", None
+                )
+            else:
+                print_debug_info = False
+            if (
+                state_options.get("integration_failure_default_handler_save_debug_file")
+                is not None
+            ):
+                save_debug_file = state_options.pop(
+                    "integration_failure_default_handler_save_debug_file", None
+                )
+            else:
+                save_debug_file = False
+            if (
+                state_options.get(
+                    "integration_failure_default_handler_save_debug_file_name"
+                )
+                is not None
+            ):
+                save_debug_file_name = state_options.pop(
+                    "integration_failure_default_handler_save_debug_file_name", None
+                )
+            else:
+                save_debug_file_name = "trajectory_analysis_result_log"
+
+            if (
+                state_options.get("integration_failure_default_handler_raise_exception")
+                is not None
+            ):
+                raise_exception = state_options.pop(
+                    "integration_failure_default_handler_raise_exception", None
+                )
+            else:
+                raise_exception = False
+            if (
+                state_options.get("integration_failure_default_handler_set_breakpoint")
+                is not None
+            ):
+                set_breakpoint = state_options.pop(
+                    "integration_failure_default_handler_set_breakpoint", None
+                )
+            else:
+                set_breakpoint = False
+
+            self.integration_failure_handler = IntegrationFailureHandler(
+                print_debug_info,
+                save_debug_file,
+                save_debug_file_name,
+                raise_exception,
+                set_breakpoint,
+            )
         self.integration_failure_handler.set_model(self)
 
         self.state_system = sgm.System(
