@@ -1,6 +1,8 @@
 import dataclasses as dc
 import logging
 
+import numpy as np
+
 from condor import backend, implementations
 
 # TODO: figure out how to make this an option/setting like django?
@@ -1382,6 +1384,8 @@ class Model(metaclass=ModelType):
 
         self.bind_input_fields(*args, **kwargs)
 
+        self.validate_input_sizes()
+
         implementation_class = cls.get_implementation_class(cls)
         self.implementation = implementation_class(self)
         # self, list(self.input_kwargs.values())
@@ -1397,6 +1401,49 @@ class Model(metaclass=ModelType):
             }
 
         self.bind_embedded_models()
+
+    def validate_input_sizes(self):
+        cls = self.__class__
+        err_flag = 0
+        err_string = ""
+
+        for input_field in cls._meta.input_fields:
+            for name in list(input_field.keys()):
+                desired_shape = getattr(cls, name).shape
+                input_value = getattr(self, name)
+
+                if not isinstance(input_value, backend.symbol_class):
+                    input_value = np.atleast_2d(input_value)
+
+                input_shape = input_value.shape
+
+                # if input is not a vector, then it has to
+                # match desired_shape exactly
+                # if desired_input is a vector, then
+                # input can be row or column vector
+
+                base_shape_correct = input_shape == desired_shape
+                input_is_vector = len(input_shape) == 2 and (
+                    input_shape[0] == 1 or input_shape[1] == 1
+                )
+                vector_input_incorrect_size = (
+                    input_is_vector
+                    and not base_shape_correct
+                    and (input_value.T.shape != desired_shape)
+                )
+                non_vector_input_incorrect_size = (
+                    not input_is_vector and not base_shape_correct
+                )
+
+                if non_vector_input_incorrect_size or vector_input_incorrect_size:
+                    err_flag = 1
+                    err_string += (
+                        f"{input_field._name} {name} was assigned with shape "
+                        f"{input_shape}, but should be shape {desired_shape}\n"
+                    )
+
+        if err_flag:
+            raise ValueError(err_string)
 
     def bind_input_fields(self, *args, **kwargs):
         cls = self.__class__
