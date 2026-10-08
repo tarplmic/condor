@@ -706,7 +706,6 @@ class TrajectoryAnalysis:
 
     @staticmethod
     def bind_result(model_instance, res):
-
         model_instance._res = res
         model_instance.t = np.array(res.t)
 
