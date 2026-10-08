@@ -577,7 +577,7 @@ class System:
         num_events,
         terminating,
         dynamic_output=None,
-        integration_failure_callback=None,  # default could be: lambda *args: breakpoint
+        integration_failure_callback=None,
         **solver_options,
     ):
         """

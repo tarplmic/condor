@@ -44,10 +44,6 @@ def isnan(x):
     return isinstance(x, float) and np.isnan(x)
 
 
-# NOTE: add options to **options for what we want __call__ to do, instead of directly
-# passing into IntegrationFailureHandler? for if the user wants to use the default
-# method but with certain options set, then they don't have to import
-# IntegrationFailureHandler class
 class IntegrationFailureHandler:
     def __init__(
         self,
@@ -86,6 +82,10 @@ class IntegrationFailureHandler:
                 dot_hist[idx, None] = system.dots(res.t[idx], np.array(res.x)[idx, :])
 
         res.y = output_hist
+
+        # convert to np arrays for bind_result function
+        res.x = np.array(res.x)
+        res.y = np.array(res.y)
 
         self.traj_analysis.bind_result(traj_analysis.model_instance, res)
         self.dot_hist = self.traj_analysis.model.state.wrap(dot_hist.T)
@@ -706,10 +706,6 @@ class TrajectoryAnalysis:
 
     @staticmethod
     def bind_result(model_instance, res):
-        if isinstance(res.x, list):
-            res.x = np.array(res.x)
-        if isinstance(res.y, list):
-            res.y = np.array(res.y)
 
         model_instance._res = res
         model_instance.t = np.array(res.t)
