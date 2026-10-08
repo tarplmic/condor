@@ -471,6 +471,7 @@ class TrajectoryAnalysis:
         )
         self.state_system.model_instance = self.model_instance
         self.at_time_slices = at_time_slices
+        
         self.trajectory_analysis_nom = sgm.TrajectoryAnalysis(
             state_system=self.state_system,
             integrand_terms=self.traj_out_integrand_func,
@@ -706,7 +707,6 @@ class TrajectoryAnalysis:
 
     @staticmethod
     def bind_result(model_instance, res):
-
         model_instance._res = res
         model_instance.t = np.array(res.t)
 
