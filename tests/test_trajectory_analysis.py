@@ -570,3 +570,23 @@ def test_resample_check_tplus(mass_spring_ode):
     simd = sim.resample(0.1, include_events=False)
     assert all(simd.x[simd.t < 0.45] > 0)
     assert all(simd.x[simd.t > 0.45] < 0)
+
+
+def test_integration_failure_handler():
+    class MySystem(co.ODESystem):
+        r = state()
+
+        vel = parameter()
+
+        dot[r] = vel
+
+        initial[r] = 0.0
+
+    class MySim(MySystem.TrajectoryAnalysis):
+        tf = 20.0
+
+        class Options:
+            integration_failure_default_handler_raise_exception = True
+
+    with pytest.raises(Exception, match="Integration unsuccessful."):
+        my_sim = MySim(vel=5e150)
