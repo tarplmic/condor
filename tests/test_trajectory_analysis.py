@@ -575,11 +575,8 @@ def test_resample_check_tplus(mass_spring_ode):
 def test_integration_failure_handler():
     class MySystem(co.ODESystem):
         r = state()
-
         vel = parameter()
-
         dot[r] = vel
-
         initial[r] = 0.0
 
     class MySim(MySystem.TrajectoryAnalysis):
