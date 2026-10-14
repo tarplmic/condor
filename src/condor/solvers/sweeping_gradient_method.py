@@ -577,7 +577,7 @@ class System:
         num_events,
         terminating,
         dynamic_output=None,
-        integration_failure_callback=None,
+        integration_failure_callback=lambda _: None,
         **solver_options,
     ):
         """

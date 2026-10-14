@@ -94,17 +94,6 @@ class IntegrationFailureHandler:
         self.compute_states_outputs_derivs(system)
         traj_analysis = self.traj_analysis
 
-        print("\n\n Integration Unsuccessful!")
-        print(
-            "These options are available to set in the "
-            f"{traj_analysis.model} Options class:\n"
-            "integration_failure_default_handler_print_debug_info\n"
-            "integration_failure_default_handler_save_debug_file\n"
-            "integration_failure_default_handler_save_debug_file_name\n"
-            "integration_failure_default_handler_set_breakpoint\n"
-            "integration_failure_default_handler_raise_exception\n"
-        )
-
         if self.do_print_debug:
             print("\n\nValues of States Before Failure: ")
             for name in traj_analysis.model_instance.state.asdict():
@@ -391,64 +380,26 @@ class TrajectoryAnalysis:
             # if user doesn't pass in their own integration_failure_handler_class,
             # assign the default handler class, and check if they set
             # any of the options in the TrajectoryAnalysis
-            if (
-                state_options.get(
-                    "integration_failure_default_handler_print_debug_info"
-                )
-                is not None
-            ):
-                print_debug_info = state_options.pop(
-                    "integration_failure_default_handler_print_debug_info", None
-                )
-            else:
-                print_debug_info = False
-            if (
-                state_options.get("integration_failure_default_handler_save_debug_file")
-                is not None
-            ):
-                save_debug_file = state_options.pop(
-                    "integration_failure_default_handler_save_debug_file", None
-                )
-            else:
-                save_debug_file = False
-            if (
-                state_options.get(
-                    "integration_failure_default_handler_save_debug_file_name"
-                )
-                is not None
-            ):
-                save_debug_file_name = state_options.pop(
-                    "integration_failure_default_handler_save_debug_file_name", None
-                )
-            else:
-                save_debug_file_name = "trajectory_analysis_result_log"
-
-            if (
-                state_options.get("integration_failure_default_handler_raise_exception")
-                is not None
-            ):
-                raise_exception = state_options.pop(
-                    "integration_failure_default_handler_raise_exception", None
-                )
-            else:
-                raise_exception = False
-            if (
-                state_options.get("integration_failure_default_handler_set_breakpoint")
-                is not None
-            ):
-                set_breakpoint = state_options.pop(
-                    "integration_failure_default_handler_set_breakpoint", None
-                )
-            else:
-                set_breakpoint = False
 
             self.integration_failure_handler = IntegrationFailureHandler(
-                print_debug_info,
-                save_debug_file,
-                save_debug_file_name,
-                raise_exception,
-                set_breakpoint,
+                state_options.pop(
+                    "integration_failure_default_handler_print_debug_info", False
+                ),
+                state_options.pop(
+                    "integration_failure_default_handler_save_debug_file", False
+                ),
+                state_options.pop(
+                    "integration_failure_default_handler_save_debug_file_name",
+                    "trajectory_analysis_result_log",
+                ),
+                state_options.pop(
+                    "integration_failure_default_handler_raise_exception", False
+                ),
+                state_options.pop(
+                    "integration_failure_default_handler_set_breakpoint", False
+                ),
             )
+
         self.integration_failure_handler.set_model(self)
 
         self.state_system = sgm.System(
