@@ -253,7 +253,7 @@ class SolverSciPyBase(SolverMixin):
                 solver.integrate(next_t)
                 if not solver.successful():
                     results.e.append(Root(len(results.t), np.zeros(system.num_events)))
-                    self.system.integration_failure_callback(self.system)
+                    self.system.solver_failure_callback(self.system)
                     return
 
                 # assume we have an event, either a true event or at next_t
@@ -577,7 +577,7 @@ class System:
         num_events,
         terminating,
         dynamic_output=None,
-        integration_failure_callback=lambda _: None,
+        solver_failure_callback=lambda _: None,
         **solver_options,
     ):
         """
@@ -603,7 +603,7 @@ class System:
         #     list of functions for
         self._updates = updates
         self.dynamic_output = dynamic_output
-        self.integration_failure_callback = integration_failure_callback
+        self.solver_failure_callback = solver_failure_callback
 
         #     define initial conditions
         self._initial_state = initial_state

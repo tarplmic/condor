@@ -23,6 +23,10 @@ from condor.backend.operators import (
     unstack,
 )
 from condor.fields import BaseElement
+from condor.handlers import (
+    BaseHandler,
+    SolverHandlerEnum,
+)
 
 from .utils import options_to_kwargs
 
@@ -42,81 +46,6 @@ def get_state_setter(field, signature, on_field=None, subs=None):
 
 def isnan(x):
     return isinstance(x, float) and np.isnan(x)
-
-
-class IntegrationFailureHandler:
-    def __init__(
-        self,
-        do_print_debug=False,
-        do_save_debug_to_npz_file=False,
-        debug_file_name="trajectory_analysis_result_log",
-        do_raise_exception=False,
-        do_set_breakpoint=False,
-    ):
-        self.do_print_debug = do_print_debug
-        self.do_save_debug_to_npz_file = do_save_debug_to_npz_file
-        self.debug_file_name = debug_file_name
-        self.do_set_breakpoint = do_set_breakpoint
-        self.do_raise_exception = do_raise_exception
-
-    def set_model(self, model):
-        self.traj_analysis = model
-
-    def compute_states_outputs_derivs(self, system):
-        traj_analysis = self.traj_analysis
-
-        res = system.result
-
-        # system.result doesn't save off dynamic_ouptuts by default,
-        # so generate them here
-        output_hist = np.empty(
-            (np.array(res.t).size, traj_analysis.model.dynamic_output._count)
-        )
-        # create history of state derivatives
-        dot_hist = np.empty(np.array(res.x).shape)
-        if traj_analysis.dynamic_output_func:
-            for idx, (t, x) in enumerate(zip(res.t, res.x)):
-                output_hist[idx, None] = traj_analysis.dynamic_output_func(
-                    res.p, t, x
-                ).T
-                dot_hist[idx, None] = system.dots(res.t[idx], np.array(res.x)[idx, :])
-
-        res.y = output_hist
-
-        # convert to np arrays for bind_result function
-        res.x = np.array(res.x)
-        res.y = np.array(res.y)
-
-        self.traj_analysis.bind_result(traj_analysis.model_instance, res)
-        self.dot_hist = self.traj_analysis.model.state.wrap(dot_hist.T)
-
-    def __call__(self, system):
-        self.compute_states_outputs_derivs(system)
-        traj_analysis = self.traj_analysis
-
-        if self.do_print_debug:
-            print("\n\nValues of States Before Failure: ")
-            for name in traj_analysis.model_instance.state.asdict():
-                data = traj_analysis.model_instance.state.asdict()[name]
-                print(f"\nValue of {name} before integration failure:")
-                print(data[:, :, -1])
-
-            print("\n\nValues of Outputs Before Failure: ")
-            for name in traj_analysis.model_instance.dynamic_output.asdict():
-                data = traj_analysis.model_instance.dynamic_output.asdict()[name]
-                print(f"\nValue of {name} before integration failure:")
-                print(data[:, :, -1])
-
-        if self.do_save_debug_to_npz_file:
-            print(f"Saving results to {self.debug_file_name}")
-            system.result.save(self.debug_file_name)
-
-        if self.do_raise_exception:
-            error_msg = "Integration unsuccessful."
-            raise Exception(error_msg)
-
-        if self.do_set_breakpoint:
-            breakpoint()
 
 
 class TrajectoryAnalysis:
@@ -146,6 +75,7 @@ class TrajectoryAnalysis:
         state_solver=None,
         adjoint_solver=None,
         solver=Solver.dopri5,
+        # solver_failure_handler=None,  # Why was this needed?
         **kwargs,
     ):
         self.state_options = state_options = {}
@@ -372,35 +302,41 @@ class TrajectoryAnalysis:
         else:
             self.dynamic_output_func = None
 
-        if state_options.get("integration_failure_handler_class") is not None:
-            self.integration_failure_handler = state_options.pop(
-                "integration_failure_handler_class", None
-            )
+        # All of the handler default classes or user custom classes must have system
+        # passed into the __call__ function of the class.
+        # They also all must have a set_model function, but if they inherit from
+        # BaseHandler, they will have that class.
+
+        if state_options.get("solver_failure_handler") is not None:
+            print("we got something for solver_failure_handler")
+            failure_handler_choices = state_options.pop("solver_failure_handler", None)
+
+            stacked_handlers = []
+
+            if not isinstance(failure_handler_choices, list):
+                failure_handler_choices = [failure_handler_choices]
+
+            for handle in failure_handler_choices:
+                if isinstance(handle, str):
+                    print("got a string")
+                    # This handle string has to be member of SolverHandlerEnum
+                    handler_member = SolverHandlerEnum(handle.lower())
+                    handler_class = handler_member.handler_class()
+                    handler_class.set_model(self)
+                    stacked_handlers.append(handler_class)
+
+                elif callable(handle):
+                    print("got a class")
+                    handle.set_model(self)
+                    stacked_handlers.append(handle)
+
+            def stacked_callable(*args):
+                for func in stacked_handlers:
+                    func(*args)
+
+            self.solver_failure_handler = stacked_callable
         else:
-            # if user doesn't pass in their own integration_failure_handler_class,
-            # assign the default handler class, and check if they set
-            # any of the options in the TrajectoryAnalysis
-
-            self.integration_failure_handler = IntegrationFailureHandler(
-                state_options.pop(
-                    "integration_failure_default_handler_print_debug_info", False
-                ),
-                state_options.pop(
-                    "integration_failure_default_handler_save_debug_file", False
-                ),
-                state_options.pop(
-                    "integration_failure_default_handler_save_debug_file_name",
-                    "trajectory_analysis_result_log",
-                ),
-                state_options.pop(
-                    "integration_failure_default_handler_raise_exception", False
-                ),
-                state_options.pop(
-                    "integration_failure_default_handler_set_breakpoint", False
-                ),
-            )
-
-        self.integration_failure_handler.set_model(self)
+            self.solver_failure_handler = BaseHandler()
 
         self.state_system = sgm.System(
             dim_state=model.state._count,
@@ -417,7 +353,7 @@ class TrajectoryAnalysis:
             num_events=num_events,
             terminating=terminating,
             dynamic_output=self.dynamic_output_func,
-            integration_failure_callback=self.integration_failure_handler,
+            solver_failure_callback=self.solver_failure_handler,
             **state_options,
         )
         self.state_system.model_instance = self.model_instance
