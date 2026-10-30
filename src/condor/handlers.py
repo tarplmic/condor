@@ -96,5 +96,5 @@ class SolverHandlerEnum(Enum):
     BASE = BaseHandler
     PRINTDEBUG = PrintDebugHandler
     SAVENPZ = SaveNpzHandler
-    BREAK = BreakpointHandler
-    EXCEPT = ExceptionHandler
+    BREAKPOINT = BreakpointHandler
+    EXCEPTION = ExceptionHandler
