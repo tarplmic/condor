@@ -4,6 +4,10 @@ from scipy import linalg
 
 import condor as co
 from condor.backend import operators as ops
+from condor.handlers import (
+    BaseHandler,
+    ExceptionHandler,
+)
 
 
 def test_t0():
@@ -579,11 +583,18 @@ def test_integration_failure_handler():
         dot[r] = vel
         initial[r] = 0.0
 
+    class MyFailureHandlerClass(BaseHandler):
+        def set_model(self, model):
+            self.traj_analysis = model
+
+        def __call__(self, **kwargs):
+            pass
+
     class MySim(MySystem.TrajectoryAnalysis):
         tf = 20.0
 
         class Options:
-            integration_failure_default_handler_raise_exception = True
+            solver_failure_handler = [MyFailureHandlerClass(), ExceptionHandler()]
 
-    with pytest.raises(Exception, match="Integration unsuccessful."):
+    with pytest.raises(RuntimeError, match="Integration unsuccessful"):
         my_sim = MySim(vel=5e150)

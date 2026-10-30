@@ -88,7 +88,7 @@ class ExceptionHandler(BaseHandler):
         self.traj_analysis = model
 
     def __call__(self, **kwargs):
-        error_msg = "Integration unsuccessful."
+        error_msg = "Integration unsuccessful"
         raise RuntimeError(error_msg)
 
 
