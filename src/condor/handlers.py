@@ -1,42 +1,16 @@
-from enum import StrEnum
+from abc import ABC, abstractmethod
+from enum import Enum
 
 import numpy as np
 
 
-class SolverHandlerEnum(StrEnum):
-    BASE = "basehandler"
-    PRINTDEBUG = "printdebughandler"
-    SAVENPZ = "savenpzhandler"
-    BREAK = "breakpointhandler"
-    EXCEPT = "exceptionhandler"
-
-    @property
-    def handler_class(self):
-        mapping = {
-            SolverHandlerEnum.BASE: BaseHandler,
-            SolverHandlerEnum.PRINTDEBUG: PrintDebugHandler,
-            SolverHandlerEnum.SAVENPZ: SaveNpzHandler,
-            SolverHandlerEnum.BREAK: BreakpointHandler,
-            SolverHandlerEnum.EXCEPT: ExceptionHandler,
-        }
-        return mapping[self]
-
-
-class BaseHandler:
-    def __init__(self):
-        pass
-
+class BaseHandler(ABC):
+    @abstractmethod
     def set_model(self, model):
-        self.traj_analysis = model
-
-    def __call__(self, system):
         pass
 
 
 class PrintDebugHandler(BaseHandler):
-    def __init__(self):
-        pass
-
     def compute_states_outputs_derivs(self, system):
         traj_analysis = self.traj_analysis
 
@@ -65,44 +39,62 @@ class PrintDebugHandler(BaseHandler):
         self.traj_analysis.bind_result(traj_analysis.model_instance, res)
         self.dot_hist = self.traj_analysis.model.state.wrap(dot_hist.T)
 
-    def __call__(self, system):
-        self.compute_states_outputs_derivs(system)
-        traj_analysis = self.traj_analysis
+    def set_model(self, model):
+        self.traj_analysis = model
 
-        print("\n\nValues of States Before Failure: ")
-        for name in traj_analysis.model_instance.state.asdict():
-            data = traj_analysis.model_instance.state.asdict()[name]
-            print(f"\nValue of {name} before integration failure:")
-            print(data[:, :, -1])
+    def __call__(self, **kwargs):
+        if hasattr(self, "traj_analysis"):
+            system = kwargs.pop("system", None)
 
-        print("\n\nValues of Outputs Before Failure: ")
-        for name in traj_analysis.model_instance.dynamic_output.asdict():
-            data = traj_analysis.model_instance.dynamic_output.asdict()[name]
-            print(f"\nValue of {name} before integration failure:")
-            print(data[:, :, -1])
+            self.compute_states_outputs_derivs(system)
+            traj_analysis = self.traj_analysis
+
+            print("\n\nValues of States Before Failure: ")
+            for name in traj_analysis.model_instance.state.asdict():
+                data = traj_analysis.model_instance.state.asdict()[name]
+                print(f"\nValue of {name} before integration failure:")
+                print(data[:, :, -1])
+
+            print("\n\nValues of Outputs Before Failure: ")
+            for name in traj_analysis.model_instance.dynamic_output.asdict():
+                data = traj_analysis.model_instance.dynamic_output.asdict()[name]
+                print(f"\nValue of {name} before integration failure:")
+                print(data[:, :, -1])
 
 
 class SaveNpzHandler(BaseHandler):
     def __init__(self, path="trajectory_analysis_result_log"):
         self.debug_file_name = path
 
-    def __call__(self, system):
+    def set_model(self, model):
+        self.traj_analysis = model
+
+    def __call__(self, **kwargs):
         print(f"Saving results to {self.debug_file_name}")
+        system = kwargs.pop("system", None)
         system.result.save(self.debug_file_name)
 
 
 class BreakpointHandler(BaseHandler):
-    def __init__(self):
-        pass
+    def set_model(self, model):
+        self.traj_analysis = model
 
-    def __call__(self, system):
+    def __call__(self, **kwargs):
         breakpoint()
 
 
 class ExceptionHandler(BaseHandler):
-    def __init__(self):
-        pass
+    def set_model(self, model):
+        self.traj_analysis = model
 
-    def __call__(self, system):
+    def __call__(self, **kwargs):
         error_msg = "Integration unsuccessful."
         raise RuntimeError(error_msg)
+
+
+class SolverHandlerEnum(Enum):
+    BASE = BaseHandler
+    PRINTDEBUG = PrintDebugHandler
+    SAVENPZ = SaveNpzHandler
+    BREAK = BreakpointHandler
+    EXCEPT = ExceptionHandler

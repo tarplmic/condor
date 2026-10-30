@@ -24,7 +24,6 @@ from condor.backend.operators import (
 )
 from condor.fields import BaseElement
 from condor.handlers import (
-    BaseHandler,
     SolverHandlerEnum,
 )
 
@@ -66,8 +65,52 @@ class TrajectoryAnalysis:
         model = model_instance.__class__
         self.model_instance = model_instance
         model_instance.options_dict = options_to_kwargs(model)
-        self.construct(model, **model_instance.options_dict)
+        failure_handler_choices = model_instance.options_dict.pop(
+            "solver_failure_handler", None
+        )
+        solver_failure_handler = self.create_solver_failure_handler(
+            failure_handler_choices
+        )
+        self.construct(
+            model,
+            solver_failure_handler=solver_failure_handler,
+            **model_instance.options_dict,
+        )
         self(model_instance)
+
+    def create_solver_failure_handler(self, failure_handler_choices):
+        # All of the handler default classes or user custom classes must have system
+        # passed into the __call__ function of the class.
+        # They also all must have a set_model function, but if they inherit from
+        # BaseHandler, they will have that class.
+
+        if failure_handler_choices is not None:
+            stacked_handlers = []
+
+            if not isinstance(failure_handler_choices, list):
+                failure_handler_choices = [failure_handler_choices]
+
+            for handle in failure_handler_choices:
+                if isinstance(handle, str):
+                    # This handle string has to be member of SolverHandlerEnum
+                    handler_class = SolverHandlerEnum[handle.upper()].value
+                    handler = handler_class()
+                    handler.set_model(self)
+                    stacked_handlers.append(handler)
+
+                elif callable(handle):
+                    handle.set_model(self)
+                    stacked_handlers.append(handle)
+
+            def stacked_callable(**kargs):
+                for func in stacked_handlers:
+                    func(**kargs)
+
+            handler = stacked_callable
+        else:
+            handler = None
+
+        return handler
 
     def construct(
         self,
@@ -75,7 +118,7 @@ class TrajectoryAnalysis:
         state_solver=None,
         adjoint_solver=None,
         solver=Solver.dopri5,
-        # solver_failure_handler=None,  # Why was this needed?
+        solver_failure_handler=None,
         **kwargs,
     ):
         self.state_options = state_options = {}
@@ -302,42 +345,6 @@ class TrajectoryAnalysis:
         else:
             self.dynamic_output_func = None
 
-        # All of the handler default classes or user custom classes must have system
-        # passed into the __call__ function of the class.
-        # They also all must have a set_model function, but if they inherit from
-        # BaseHandler, they will have that class.
-
-        if state_options.get("solver_failure_handler") is not None:
-            print("we got something for solver_failure_handler")
-            failure_handler_choices = state_options.pop("solver_failure_handler", None)
-
-            stacked_handlers = []
-
-            if not isinstance(failure_handler_choices, list):
-                failure_handler_choices = [failure_handler_choices]
-
-            for handle in failure_handler_choices:
-                if isinstance(handle, str):
-                    print("got a string")
-                    # This handle string has to be member of SolverHandlerEnum
-                    handler_member = SolverHandlerEnum(handle.lower())
-                    handler_class = handler_member.handler_class()
-                    handler_class.set_model(self)
-                    stacked_handlers.append(handler_class)
-
-                elif callable(handle):
-                    print("got a class")
-                    handle.set_model(self)
-                    stacked_handlers.append(handle)
-
-            def stacked_callable(*args):
-                for func in stacked_handlers:
-                    func(*args)
-
-            self.solver_failure_handler = stacked_callable
-        else:
-            self.solver_failure_handler = BaseHandler()
-
         self.state_system = sgm.System(
             dim_state=model.state._count,
             initial_state=self.state0,
@@ -353,7 +360,7 @@ class TrajectoryAnalysis:
             num_events=num_events,
             terminating=terminating,
             dynamic_output=self.dynamic_output_func,
-            solver_failure_callback=self.solver_failure_handler,
+            solver_failure_callback=solver_failure_handler,
             **state_options,
         )
         self.state_system.model_instance = self.model_instance
