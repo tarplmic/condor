@@ -576,25 +576,36 @@ def test_resample_check_tplus(mass_spring_ode):
     assert all(simd.x[simd.t > 0.45] < 0)
 
 
-def test_integration_failure_handler():
+class MyFailureHandlerClass(BaseHandler):
+    def set_model(self, model):
+        self.traj_analysis = model
+
+    def __call__(self, **kwargs):
+        pass
+
+
+@pytest.mark.parametrize(
+    ("handler_choices"),
+    [
+        "Exception",
+        ["Exception"],
+        ExceptionHandler(),
+        [ExceptionHandler()],
+        [MyFailureHandlerClass(), ExceptionHandler()],
+    ],
+)
+def test_solver_failure_handler(handler_choices):
     class MySystem(co.ODESystem):
         r = state()
         vel = parameter()
         dot[r] = vel
         initial[r] = 0.0
 
-    class MyFailureHandlerClass(BaseHandler):
-        def set_model(self, model):
-            self.traj_analysis = model
-
-        def __call__(self, **kwargs):
-            pass
-
-    class MySim(MySystem.TrajectoryAnalysis):
+    class SimDefaultHandlers(MySystem.TrajectoryAnalysis):
         tf = 20.0
 
         class Options:
-            solver_failure_handler = [MyFailureHandlerClass(), ExceptionHandler()]
+            solver_failure_handler = handler_choices
 
     with pytest.raises(RuntimeError, match="Integration unsuccessful"):
-        my_sim = MySim(vel=5e150)
+        my_sim = SimDefaultHandlers(vel=5e150)

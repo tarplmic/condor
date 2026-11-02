@@ -65,11 +65,8 @@ class TrajectoryAnalysis:
         model = model_instance.__class__
         self.model_instance = model_instance
         model_instance.options_dict = options_to_kwargs(model)
-        failure_handler_choices = model_instance.options_dict.pop(
+        solver_failure_handler = model_instance.options_dict.pop(
             "solver_failure_handler", None
-        )
-        solver_failure_handler = self.create_solver_failure_handler(
-            failure_handler_choices
         )
         self.construct(
             model,
@@ -77,40 +74,6 @@ class TrajectoryAnalysis:
             **model_instance.options_dict,
         )
         self(model_instance)
-
-    def create_solver_failure_handler(self, failure_handler_choices):
-        # All of the handler default classes or user custom classes must have system
-        # passed into the __call__ function of the class.
-        # They also all must have a set_model function, but if they inherit from
-        # BaseHandler, they will have that class.
-
-        if failure_handler_choices is not None:
-            stacked_handlers = []
-
-            if not isinstance(failure_handler_choices, list):
-                failure_handler_choices = [failure_handler_choices]
-
-            for handle in failure_handler_choices:
-                if isinstance(handle, str):
-                    # This handle string has to be member of SolverHandlerEnum
-                    handler_class = SolverHandlerEnum[handle.upper()].value
-                    handler = handler_class()
-                    handler.set_model(self)
-                    stacked_handlers.append(handler)
-
-                elif callable(handle):
-                    handle.set_model(self)
-                    stacked_handlers.append(handle)
-
-            def stacked_callable(**kargs):
-                for func in stacked_handlers:
-                    func(**kargs)
-
-            handler = stacked_callable
-        else:
-            handler = None
-
-        return handler
 
     def construct(
         self,
@@ -344,6 +307,10 @@ class TrajectoryAnalysis:
             )
         else:
             self.dynamic_output_func = None
+
+        solver_failure_handler = self.create_solver_failure_handler(
+            solver_failure_handler
+        )
 
         self.state_system = sgm.System(
             dim_state=model.state._count,
@@ -627,6 +594,35 @@ class TrajectoryAnalysis:
             self = TrajectoryAnalysis  # noqa: PLW0642
         if model_instance._res is not None:
             model_instance._res.save(filename)
+
+    def create_solver_failure_handler(self, failure_handler_choices):
+        if failure_handler_choices is not None:
+            stacked_handlers = []
+
+            if not isinstance(failure_handler_choices, list):
+                failure_handler_choices = [failure_handler_choices]
+
+            for handle in failure_handler_choices:
+                if isinstance(handle, str):
+                    # This handle string has to be member of SolverHandlerEnum
+                    handler_class = SolverHandlerEnum[handle.upper()].value
+                    handler = handler_class()
+                    handler.set_model(self)
+                    stacked_handlers.append(handler)
+
+                elif callable(handle):
+                    handle.set_model(self)
+                    stacked_handlers.append(handle)
+
+            def stacked_callable(**kargs):
+                for func in stacked_handlers:
+                    func(**kargs)
+
+            handler = stacked_callable
+        else:
+            handler = None
+
+        return handler
 
     def __call__(self, model_instance):
         self.callback.from_implementation = True
