@@ -23,9 +23,7 @@ from condor.backend.operators import (
     unstack,
 )
 from condor.fields import BaseElement
-from condor.handlers import (
-    SolverHandlerEnum,
-)
+from condor.handlers import create_solver_failure_handler
 
 from .utils import options_to_kwargs
 
@@ -308,8 +306,8 @@ class TrajectoryAnalysis:
         else:
             self.dynamic_output_func = None
 
-        solver_failure_handler = self.create_solver_failure_handler(
-            solver_failure_handler
+        solver_failure_handler = create_solver_failure_handler(
+            self, solver_failure_handler
         )
 
         self.state_system = sgm.System(
@@ -594,35 +592,6 @@ class TrajectoryAnalysis:
             self = TrajectoryAnalysis  # noqa: PLW0642
         if model_instance._res is not None:
             model_instance._res.save(filename)
-
-    def create_solver_failure_handler(self, failure_handler_choices):
-        if failure_handler_choices is not None:
-            stacked_handlers = []
-
-            if not isinstance(failure_handler_choices, list):
-                failure_handler_choices = [failure_handler_choices]
-
-            for handle in failure_handler_choices:
-                if isinstance(handle, str):
-                    # This handle string has to be member of SolverHandlerEnum
-                    handler_class = SolverHandlerEnum[handle.upper()].value
-                    handler = handler_class()
-                    handler.set_model(self)
-                    stacked_handlers.append(handler)
-
-                elif callable(handle):
-                    handle.set_model(self)
-                    stacked_handlers.append(handle)
-
-            def stacked_callable(**kargs):
-                for func in stacked_handlers:
-                    func(**kargs)
-
-            handler = stacked_callable
-        else:
-            handler = None
-
-        return handler
 
     def __call__(self, model_instance):
         self.callback.from_implementation = True

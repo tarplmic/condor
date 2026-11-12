@@ -111,3 +111,33 @@ class SolverHandlerEnum(Enum):
     SAVENPZ = SaveNpzHandler
     BREAKPOINT = BreakpointHandler
     EXCEPTION = ExceptionHandler
+
+
+def create_solver_failure_handler(model, failure_handler_choices):
+    if failure_handler_choices is not None:
+        stacked_handlers = []
+
+        if not isinstance(failure_handler_choices, list):
+            failure_handler_choices = [failure_handler_choices]
+
+        for handle in failure_handler_choices:
+            if isinstance(handle, str):
+                # This handle string has to be member of SolverHandlerEnum
+                handler_class = SolverHandlerEnum[handle.upper()].value
+                handler = handler_class()
+                handler.set_model(model)
+                stacked_handlers.append(handler)
+
+            elif callable(handle):
+                handle.set_model(model)
+                stacked_handlers.append(handle)
+
+        def stacked_callable(**kwargs):
+            for func in stacked_handlers:
+                func(**kwargs)
+
+        handler = stacked_callable
+    else:
+        handler = None
+
+    return handler
