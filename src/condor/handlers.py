@@ -9,6 +9,10 @@ class BaseHandler(ABC):
     def set_model(self, model):
         pass
 
+    @abstractmethod
+    def __call__(self, **kwargs):
+        pass
+
 
 class PrintDebugHandler(BaseHandler):
     def compute_states_outputs_derivs(self, system):
@@ -49,17 +53,26 @@ class PrintDebugHandler(BaseHandler):
             self.compute_states_outputs_derivs(system)
             traj_analysis = self.traj_analysis
 
+            print("\n\nSimulation Time Before Failure: ")
+            print(system.result.t[-1])
+
             print("\n\nValues of States Before Failure: ")
             for name in traj_analysis.model_instance.state.asdict():
                 data = traj_analysis.model_instance.state.asdict()[name]
                 print(f"\nValue of {name} before integration failure:")
-                print(data[:, :, -1])
+                print(data[..., -1])
+
+            print("\n\nValues of State Derivatives Before Failure: ")
+            for name in traj_analysis.model_instance.state.asdict():
+                data = self.dot_hist.asdict()[name]
+                print(f"\nValue of {name} derivative before integration failure:")
+                print(data[..., -1])
 
             print("\n\nValues of Outputs Before Failure: ")
             for name in traj_analysis.model_instance.dynamic_output.asdict():
                 data = traj_analysis.model_instance.dynamic_output.asdict()[name]
                 print(f"\nValue of {name} before integration failure:")
-                print(data[:, :, -1])
+                print(data[..., -1])
 
 
 class SaveNpzHandler(BaseHandler):
