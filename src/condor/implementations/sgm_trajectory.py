@@ -63,12 +63,8 @@ class TrajectoryAnalysis:
         model = model_instance.__class__
         self.model_instance = model_instance
         model_instance.options_dict = options_to_kwargs(model)
-        solver_failure_handler = model_instance.options_dict.pop(
-            "solver_failure_handler", None
-        )
         self.construct(
             model,
-            solver_failure_handler=solver_failure_handler,
             **model_instance.options_dict,
         )
         self(model_instance)
