@@ -10,7 +10,7 @@ class BaseHandler(ABC):
         pass
 
 
-class TrajAnalysisPrintDebug(BaseHandler):
+class TrajAnalysisPrintDebugHandler(BaseHandler):
     def compute_states_outputs_derivs(self, system):
         traj_analysis = self.model_instance.implementation
         self.traj_analysis = traj_analysis
@@ -91,7 +91,7 @@ class ExceptionHandler(BaseHandler):
 
 class SolverHandlerEnum(Enum):
     BASE = BaseHandler
-    TRAJANALYSISPRINTDEBUG = TrajAnalysisPrintDebug
+    TRAJANALYSISPRINTDEBUG = TrajAnalysisPrintDebugHandler
     TRAJANALYSISSAVENPZ = TrajAnalysisSaveNpzHandler
     BREAKPOINT = BreakpointHandler
     EXCEPTION = ExceptionHandler
