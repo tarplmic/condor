@@ -253,6 +253,7 @@ class SolverSciPyBase(SolverMixin):
                 solver.integrate(next_t)
                 if not solver.successful():
                     results.e.append(Root(len(results.t), np.zeros(system.num_events)))
+                    self.store_result(results.t[-1], results.x[-1])
                     if self.system.solver_failure_callback is not None:
                         self.system.solver_failure_callback(
                             system=self.system, solver=solver
