@@ -577,7 +577,6 @@ def test_resample_check_tplus(mass_spring_ode):
 
 
 class MyFailureHandlerClass(BaseHandler):
-
     def __call__(self, **kwargs):
         pass
 
