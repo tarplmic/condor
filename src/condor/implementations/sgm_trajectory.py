@@ -60,6 +60,8 @@ class TrajectoryAnalysis:
         dop853 = sgm.SolverSciPyDop853
 
     def __init__(self, model_instance):
+        model_instance.implementation = self
+
         model = model_instance.__class__
         self.model_instance = model_instance
         model_instance.options_dict = options_to_kwargs(model)
@@ -303,7 +305,7 @@ class TrajectoryAnalysis:
             self.dynamic_output_func = None
 
         solver_failure_handler = create_solver_failure_handler(
-            self, solver_failure_handler
+            self.model_instance, solver_failure_handler
         )
 
         self.state_system = sgm.System(

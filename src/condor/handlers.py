@@ -6,17 +6,14 @@ import numpy as np
 
 class BaseHandler(ABC):
     @abstractmethod
-    def set_model(self, model):
-        pass
-
-    @abstractmethod
     def __call__(self, **kwargs):
         pass
 
 
-class PrintDebugHandler(BaseHandler):
+class TrajectoryAnalysisPrintDebugHandler(BaseHandler):
     def compute_states_outputs_derivs(self, system):
-        traj_analysis = self.traj_analysis
+        traj_analysis = self.model_instance.implementation
+        self.traj_analysis = traj_analysis
 
         res = system.result
 
@@ -43,44 +40,37 @@ class PrintDebugHandler(BaseHandler):
         self.traj_analysis.bind_result(traj_analysis.model_instance, res)
         self.dot_hist = self.traj_analysis.model.state.wrap(dot_hist.T)
 
-    def set_model(self, model):
-        self.traj_analysis = model
-
     def __call__(self, **kwargs):
-        if hasattr(self, "traj_analysis"):
-            system = kwargs.pop("system", None)
+        system = kwargs.pop("system", None)
 
-            self.compute_states_outputs_derivs(system)
-            traj_analysis = self.traj_analysis
+        self.compute_states_outputs_derivs(system)
+        traj_analysis = self.traj_analysis
 
-            print("\n\nSimulation Time Before Failure: ")
-            print(system.result.t[-1])
+        print("\n\nSimulation Time Before Failure: ")
+        print(system.result.t[-1])
 
-            print("\n\nValues of States Before Failure: ")
-            for name in traj_analysis.model_instance.state.asdict():
-                data = traj_analysis.model_instance.state.asdict()[name]
-                print(f"\nValue of {name} before integration failure:")
-                print(data[..., -1])
+        print("\n\nValues of States Before Failure: ")
+        for name in traj_analysis.model_instance.state.asdict():
+            data = traj_analysis.model_instance.state.asdict()[name]
+            print(f"\nValue of {name} before integration failure:")
+            print(data[..., -1])
 
-            print("\n\nValues of State Derivatives Before Failure: ")
-            for name in traj_analysis.model_instance.state.asdict():
-                data = self.dot_hist.asdict()[name]
-                print(f"\nValue of {name} derivative before integration failure:")
-                print(data[..., -1])
+        print("\n\nValues of State Derivatives Before Failure: ")
+        for name in traj_analysis.model_instance.state.asdict():
+            data = self.dot_hist.asdict()[name]
+            print(f"\nValue of {name} derivative before integration failure:")
+            print(data[..., -1])
 
-            print("\n\nValues of Outputs Before Failure: ")
-            for name in traj_analysis.model_instance.dynamic_output.asdict():
-                data = traj_analysis.model_instance.dynamic_output.asdict()[name]
-                print(f"\nValue of {name} before integration failure:")
-                print(data[..., -1])
+        print("\n\nValues of Outputs Before Failure: ")
+        for name in traj_analysis.model_instance.dynamic_output.asdict():
+            data = traj_analysis.model_instance.dynamic_output.asdict()[name]
+            print(f"\nValue of {name} before integration failure:")
+            print(data[..., -1])
 
 
-class SaveNpzHandler(BaseHandler):
+class TrajectoryAnalysisSaveNpzHandler(BaseHandler):
     def __init__(self, path="trajectory_analysis_result_log"):
         self.debug_file_name = path
-
-    def set_model(self, model):
-        self.traj_analysis = model
 
     def __call__(self, **kwargs):
         print(f"Saving results to {self.debug_file_name}")
@@ -89,17 +79,11 @@ class SaveNpzHandler(BaseHandler):
 
 
 class BreakpointHandler(BaseHandler):
-    def set_model(self, model):
-        self.traj_analysis = model
-
     def __call__(self, **kwargs):
         breakpoint()
 
 
 class ExceptionHandler(BaseHandler):
-    def set_model(self, model):
-        self.traj_analysis = model
-
     def __call__(self, **kwargs):
         error_msg = "Integration unsuccessful"
         raise RuntimeError(error_msg)
@@ -107,13 +91,13 @@ class ExceptionHandler(BaseHandler):
 
 class SolverHandlerEnum(Enum):
     BASE = BaseHandler
-    PRINTDEBUG = PrintDebugHandler
-    SAVENPZ = SaveNpzHandler
+    TRAJANALYSISPRINTDEBUG = TrajectoryAnalysisPrintDebugHandler
+    TRAJANALYSISSAVENPZ = TrajectoryAnalysisSaveNpzHandler
     BREAKPOINT = BreakpointHandler
     EXCEPTION = ExceptionHandler
 
 
-def create_solver_failure_handler(model, failure_handler_choices):
+def create_solver_failure_handler(model_instance, failure_handler_choices):
     if failure_handler_choices is not None:
         stacked_handlers = []
 
@@ -125,11 +109,11 @@ def create_solver_failure_handler(model, failure_handler_choices):
                 # This handle string has to be member of SolverHandlerEnum
                 handler_class = SolverHandlerEnum[handle.upper()].value
                 handler = handler_class()
-                handler.set_model(model)
+                handler.model_instance = model_instance
                 stacked_handlers.append(handler)
 
             elif callable(handle):
-                handle.set_model(model)
+                handle.model_instance = model_instance
                 stacked_handlers.append(handle)
 
         def stacked_callable(**kwargs):
