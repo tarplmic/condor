@@ -577,8 +577,6 @@ def test_resample_check_tplus(mass_spring_ode):
 
 
 class MyFailureHandlerClass(BaseHandler):
-    def set_model(self, model):
-        self.traj_analysis = model
 
     def __call__(self, **kwargs):
         pass
